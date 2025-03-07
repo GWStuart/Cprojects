@@ -7,26 +7,31 @@
 
 #define WIDTH 610
 #define HEIGHT 610
+#define HD_RENDER_ITERATIONS 99999
+#define LD_RENDER_ITERATIONS 10000
 
-#define ITERATIONS 1000
-
-int zoom = 60;
+// define some global variables
+int zoom = 55;
+int fern_x = WIDTH / 2;
+int fern_y = HEIGHT;
 
 /*
 * render the fern
 */
-void render_fern(SDL_Renderer* renderer) {
+void render_fern(SDL_Renderer* renderer, int iterations, int clear_first) {
     // fill the background
-    SDL_SetRenderDrawColor(renderer, 0x12, 0x0c, 0x36, 0xff);
-    SDL_RenderClear(renderer);
+    if (clear_first) {
+        SDL_SetRenderDrawColor(renderer, 0x12, 0x0c, 0x36, 0xff);
+        SDL_RenderClear(renderer);
+    }
 
     int num;
     double point[] = {0, 0};
 
     SDL_SetRenderDrawColor(renderer, 0, 0xff, 0, 0xff);
 
-    for (int i=0; i<ITERATIONS; i++) {
-        SDL_RenderPoint(renderer, point[0] * zoom + 305, point[1] * -zoom + 610);
+    for (int i=0; i<iterations; i++) {
+        SDL_RenderPoint(renderer, point[0] * zoom + fern_x, point[1] * -zoom + fern_y);
         num = rand() % 100;
         
         if (num == 1) {
@@ -64,12 +69,14 @@ int main() {
     SDL_RenderPresent(renderer);  // update the screen
 
     // draw the fern
-    render_fern(renderer);
+    render_fern(renderer, HD_RENDER_ITERATIONS, 1);
 
 
     SDL_RenderPresent(renderer);  // update the screen
 
     SDL_Event event;
+    int mouse_down = 0;
+    int inactivity = 0;
     int run = 1;
     while (run) {
         // run the event loop
@@ -86,8 +93,38 @@ int main() {
             else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
                 int scroll = event.wheel.y;
                 zoom += scroll;
-                render_fern(renderer);
+
+                render_fern(renderer, LD_RENDER_ITERATIONS, 1);
+                inactivity = 100000;
             }
+
+            // check for mouse clicks
+            else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                mouse_down = 1;
+            }
+            else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+                mouse_down = 0;
+            }
+
+            // check for mouse movement
+            else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+                if (mouse_down) {
+                    int xrel = event.motion.xrel;
+                    int yrel = event.motion.yrel;
+                    fern_x += xrel;
+                    fern_y += yrel;
+
+                    render_fern(renderer, LD_RENDER_ITERATIONS, 1);
+                    inactivity = 100000;
+                }
+            }
+        }
+
+        if (inactivity > 0) {
+            if (inactivity == 1) {
+                render_fern(renderer, HD_RENDER_ITERATIONS, 0);
+            }
+            inactivity --;
         }
     }
 
