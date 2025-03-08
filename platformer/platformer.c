@@ -4,6 +4,8 @@
 #include <stdio.h>
 
 
+#define FPS 60
+
 #define WIDTH 800
 #define HEIGHT 600
 #define PLAYER_SIZE 20
@@ -53,9 +55,15 @@ int main() {
     SDL_FRect player_rect = {100, 440, PLAYER_SIZE, PLAYER_SIZE};
     Player player = {&player_rect, 0, 0};
 
+    Uint32 frame_time;  // length of frame in miliseconds
+    const Uint32 FRAME_DELAY = 1000 / FPS;  // desired frame time
+    
     SDL_Event event;
+
     int run = 1;
     while (run) {
+        frame_time = SDL_GetTicks();  // get the start time
+
         while (SDL_PollEvent(&event)) {
             // check for a quit event
             if (event.type == SDL_EVENT_QUIT) { run = 0; }
@@ -68,9 +76,15 @@ int main() {
         }
 
         player_rect.y += player.yvel;
-        player.yvel += 0.000001;
+        player.yvel += 1;
 
         render_screen(renderer, &player, obstacles, obstacle_count);
         SDL_RenderPresent(renderer);  // update the screen
+
+        // Cap the FPS
+        frame_time = SDL_GetTicks() - frame_time;  // calculate frame duration
+        if (frame_time < FRAME_DELAY) {
+            SDL_Delay(FRAME_DELAY - frame_time);
+        }
     }
 }
