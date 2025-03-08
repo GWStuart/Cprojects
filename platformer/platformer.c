@@ -6,11 +6,20 @@
 
 #define WIDTH 800
 #define HEIGHT 600
+#define PLAYER_SIZE 20
+
+
+// struct to hold player info
+typedef struct {
+    SDL_FRect* rect;
+    double xvel;
+    double yvel;
+} Player;
 
 /*
 * render the screen in its current state
 */
-void render_screen(SDL_Renderer *renderer, SDL_FRect *obstacles, int obstacle_count) {
+void render_screen(SDL_Renderer *renderer, Player* player, SDL_FRect *obstacles, int obstacle_count) {
     // fill the background
     SDL_SetRenderDrawColor(renderer, 0x12, 0x0c, 0x36, 0xff);
     SDL_RenderClear(renderer);
@@ -20,6 +29,10 @@ void render_screen(SDL_Renderer *renderer, SDL_FRect *obstacles, int obstacle_co
     for (int i=0; i<obstacle_count; i++) {
         SDL_RenderFillRect(renderer, obstacles + i);
     }
+
+    // render the player
+    SDL_SetRenderDrawColor(renderer, 0x3c, 0xd6, 0x65, 0xff);
+    SDL_RenderFillRect(renderer, player->rect);
 }
 
 
@@ -31,10 +44,14 @@ int main() {
 
     // array containing the obstacles
     SDL_FRect obstacles[] = {
-        {200, 200, 200, 200},
-        {500, 500, 20, 20}
+        {0, 575, 500, 25},
+        {200, 460, 100, 25}
     };
     int obstacle_count = sizeof(obstacles) / sizeof(obstacles[0]);
+
+    // define the player
+    SDL_FRect player_rect = {100, 440, PLAYER_SIZE, PLAYER_SIZE};
+    Player player = {&player_rect, 0, 0};
 
     SDL_Event event;
     int run = 1;
@@ -50,7 +67,10 @@ int main() {
             }
         }
 
-        render_screen(renderer, obstacles, obstacle_count);
+        player_rect.y += player.yvel;
+        player.yvel += 0.000001;
+
+        render_screen(renderer, &player, obstacles, obstacle_count);
         SDL_RenderPresent(renderer);  // update the screen
     }
 }
