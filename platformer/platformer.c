@@ -22,22 +22,38 @@ typedef struct {
 
 
 /*
- * Returns 1 if there is a collision with the top of an obstacle and 0 otherwise
+ * Returns 1 if there is a collision with an obstacle and 0 otherwise
  * The object with which the player collided with will be stroed in the collision_rect
 */
 int player_collision(SDL_FRect* collision_rect, Player* player, SDL_FRect* obstacles, int obstacle_count) {
     for (int i=0; i<obstacle_count; i++) {
-        // check if the player is within the horiztonal range of the obstacle
-        if (player->rect->x + PLAYER_SIZE >= obstacles[i].x && player->rect->x <= obstacles[i].x + obstacles[i].w) {
-            // check if the y values collide with the top of the object
-            if (player->rect->y + PLAYER_SIZE >= obstacles[i].y && player->rect->y <= obstacles[i].y + obstacles[i].h) {
-                *collision_rect = obstacles[i];
-                return 1;
-            }
+        if (player->rect->x + player->rect->w >= obstacles[i].x &&
+                player->rect->x <= obstacles[i].x + obstacles[i].w &&
+                player->rect->y + player->rect->h >= obstacles[i].y &&
+                player->rect->y <= obstacles[i].y + obstacles[i].h) {
+
+            *collision_rect = obstacles[i];
+            return 1;
         }
     }
 
     return 0;  // no collision detected
+}
+
+/*
+ * move the player horiztonaly by the specified dx
+ */
+void move_player(int dx, SDL_FRect* collision_rect, Player* player, SDL_FRect* obstacles, int obstacle_count) {
+    player->rect->x += dx;
+    player->rect->y -= 1;  // take player off the ground
+    if (player_collision(collision_rect, player, obstacles, obstacle_count)) {
+        if (dx > 0) {  // moving right
+            player->rect->x = collision_rect->x - PLAYER_SIZE - 1;
+        } else {  // moving left
+            player->rect->x = collision_rect->x + collision_rect->w + 1;
+        }
+    }
+    player->rect->y += 1;  // return player
 }
 
 /*
@@ -70,7 +86,10 @@ int main() {
     SDL_FRect obstacles[] = {
         {0, 575, 500, 25},
         {200, 460, 100, 25},
-        {425, 450, 25, 100}
+        {425, 500, 25, 75},
+        {300, 360, 100, 25},
+        {400, 260, 100, 25},
+        {300, 160, 100, 25},
     };
     int obstacle_count = sizeof(obstacles) / sizeof(obstacles[0]);
 
@@ -82,6 +101,7 @@ int main() {
     Uint32 frame_time;  // length of frame in miliseconds
     const Uint32 FRAME_DELAY = 1000 / FPS;  // desired frame time
     
+    const bool* keys = SDL_GetKeyboardState(NULL);  // get key presses
     SDL_Event event;
 
     int run = 1;
@@ -96,23 +116,30 @@ int main() {
             else if (event.type == SDL_EVENT_KEY_DOWN) {
                 // q key quits the platformer
                 if (event.key.key == SDLK_Q) { run = 0; }
-
-                // WASD for movement
-                else if (event.key.key == SDLK_W) { 
-                    player.yvel = -10;  // give them an upward velocity
-                } else if (event.key.key == SDLK_D) {
-                    player_rect.x += 10;
-                } else if (event.key.key == SDLK_A) {
-                    player_rect.x -= 10;
-                }
             }
+        }
+
+        // get key presses
+        if (keys[SDL_SCANCODE_W] && player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
+            player.yvel = -15;  // give an upward velocity
+        }
+        if (keys[SDL_SCANCODE_D]) {
+            move_player(5, &collision_rect, &player, obstacles, obstacle_count);
+        }
+        if (keys[SDL_SCANCODE_A]) {
+            move_player(-5, &collision_rect, &player, obstacles, obstacle_count);
         }
 
         player_rect.y += player.yvel;
         player.yvel += ACCELERATION;
 
         if (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
-            player_rect.y = collision_rect.y - PLAYER_SIZE;
+            // positive yvel means player is falling
+            if (player.yvel > 0) {
+                player_rect.y = collision_rect.y - PLAYER_SIZE;
+            } else {  // negative yvel means the player is falling
+                player_rect.y = collision_rect.y + collision_rect.h + 1;
+            }
             player.yvel = 0;
         }
 
