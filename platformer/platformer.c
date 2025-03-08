@@ -8,7 +8,9 @@
 
 #define WIDTH 800
 #define HEIGHT 600
+
 #define PLAYER_SIZE 20
+#define ACCELERATION 1
 
 
 // struct to hold player info
@@ -18,10 +20,30 @@ typedef struct {
     double yvel;
 } Player;
 
+
+/*
+ * Returns 1 if there is a collision with the top of an obstacle and 0 otherwise
+ * The object with which the player collided with will be stroed in the collision_rect
+*/
+int player_collision(SDL_FRect* collision_rect, Player* player, SDL_FRect* obstacles, int obstacle_count) {
+    for (int i=0; i<obstacle_count; i++) {
+        // check if the player is within the horiztonal range of the obstacle
+        if (player->rect->x + PLAYER_SIZE >= obstacles[i].x && player->rect->x <= obstacles[i].x + obstacles[i].w) {
+            // check if the y values collide with the top of the object
+            if (player->rect->y + PLAYER_SIZE >= obstacles[i].y && player->rect->y <= obstacles[i].y + obstacles[i].h) {
+                *collision_rect = obstacles[i];
+                return 1;
+            }
+        }
+    }
+
+    return 0;  // no collision detected
+}
+
 /*
 * render the screen in its current state
 */
-void render_screen(SDL_Renderer *renderer, Player* player, SDL_FRect *obstacles, int obstacle_count) {
+void render_screen(SDL_Renderer *renderer, Player* player, SDL_FRect* obstacles, int obstacle_count) {
     // fill the background
     SDL_SetRenderDrawColor(renderer, 0x12, 0x0c, 0x36, 0xff);
     SDL_RenderClear(renderer);
@@ -47,13 +69,15 @@ int main() {
     // array containing the obstacles
     SDL_FRect obstacles[] = {
         {0, 575, 500, 25},
-        {200, 460, 100, 25}
+        {200, 460, 100, 25},
+        {425, 450, 25, 100}
     };
     int obstacle_count = sizeof(obstacles) / sizeof(obstacles[0]);
 
     // define the player
     SDL_FRect player_rect = {100, 440, PLAYER_SIZE, PLAYER_SIZE};
     Player player = {&player_rect, 0, 0};
+    SDL_FRect collision_rect;
 
     Uint32 frame_time;  // length of frame in miliseconds
     const Uint32 FRAME_DELAY = 1000 / FPS;  // desired frame time
@@ -72,11 +96,25 @@ int main() {
             else if (event.type == SDL_EVENT_KEY_DOWN) {
                 // q key quits the platformer
                 if (event.key.key == SDLK_Q) { run = 0; }
+
+                // WASD for movement
+                else if (event.key.key == SDLK_W) { 
+                    player.yvel = -10;  // give them an upward velocity
+                } else if (event.key.key == SDLK_D) {
+                    player_rect.x += 10;
+                } else if (event.key.key == SDLK_A) {
+                    player_rect.x -= 10;
+                }
             }
         }
 
         player_rect.y += player.yvel;
-        player.yvel += 1;
+        player.yvel += ACCELERATION;
+
+        if (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
+            player_rect.y = collision_rect.y - PLAYER_SIZE;
+            player.yvel = 0;
+        }
 
         render_screen(renderer, &player, obstacles, obstacle_count);
         SDL_RenderPresent(renderer);  // update the screen
