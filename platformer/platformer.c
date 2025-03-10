@@ -14,6 +14,8 @@
 #define FRICTION 0.85
 #define JUMP_VEL 14
 
+#define CAMERA_SPEED 0.2
+
 
 // struct to hold player info
 typedef struct {
@@ -22,6 +24,26 @@ typedef struct {
     double yvel;
 } Player;
 
+
+// struct to hold camera info
+// the x and y represent the top left point of the camera
+typedef struct {
+    double x;
+    double y;
+    double zoom;  // not currently being used
+} Camera;
+
+
+/*
+ * Focuses the camera on the given x,y position (where x and y are global coordinate values)
+ * This is done so that the centre of the camera is on (x,y)
+ */
+void focus_camera(Camera* camera, float x, float y, float camera_speed) {
+    double dx = (x - WIDTH/2) - camera->x;
+    double dy = (y - HEIGHT/2) - camera->y;
+    camera->x += dx * camera_speed;
+    camera->y += dy * camera_speed;
+}
 
 /*
  * Returns 1 if there is a collision with an obstacle and 0 otherwise
@@ -62,7 +84,7 @@ void move_player(double dx, SDL_FRect* collision_rect, Player* player, SDL_FRect
 /*
 * render the screen in its current state
 */
-void render_screen(SDL_Renderer *renderer, Player* player, SDL_FRect* obstacles, int obstacle_count) {
+void render_screen(SDL_Renderer *renderer, Camera* camera, Player* player, SDL_FRect* obstacles, int obstacle_count) {
     // fill the background
     SDL_SetRenderDrawColor(renderer, 0x12, 0x0c, 0x36, 0xff);
     SDL_RenderClear(renderer);
@@ -70,12 +92,15 @@ void render_screen(SDL_Renderer *renderer, Player* player, SDL_FRect* obstacles,
     // render the obstacles
     SDL_SetRenderDrawColor(renderer, 0xf7, 0xc1, 0x2d, 0xff);
     for (int i=0; i<obstacle_count; i++) {
-        SDL_RenderFillRect(renderer, obstacles + i);
+        SDL_FRect* obstacle = obstacles + i;  // get the current obstacle
+        SDL_FRect obstacle_local = {obstacle->x - camera->x, obstacle->y - camera->y, obstacle->w, obstacle->h};
+        SDL_RenderFillRect(renderer, &obstacle_local);
     }
 
     // render the player
     SDL_SetRenderDrawColor(renderer, 0x3c, 0xd6, 0x65, 0xff);
-    SDL_RenderFillRect(renderer, player->rect);
+    SDL_FRect player_local = {player->rect->x - camera->x, player->rect->y - camera->y, player->rect->w, player->rect->h};
+    SDL_RenderFillRect(renderer, &player_local);
 }
 
 
@@ -100,6 +125,10 @@ int main() {
     SDL_FRect player_rect = {100, 440, PLAYER_SIZE, PLAYER_SIZE};
     Player player = {&player_rect, 0, 0};
     SDL_FRect collision_rect;
+
+    // initialise the camera
+    Camera camera = {0, 0, 1};
+    focus_camera(&camera, player_rect.x, player_rect.y, 1);
 
     Uint32 frame_time;  // length of frame in miliseconds
     const Uint32 FRAME_DELAY = 1000 / FPS;  // desired frame time
@@ -153,7 +182,10 @@ int main() {
             player.yvel = 0;
         }
 
-        render_screen(renderer, &player, obstacles, obstacle_count);
+        // update the camera position
+        focus_camera(&camera, player_rect.x, player_rect.y, CAMERA_SPEED);
+
+        render_screen(renderer, &camera, &player, obstacles, obstacle_count);
         SDL_RenderPresent(renderer);  // update the screen
 
         // Cap the FPS
