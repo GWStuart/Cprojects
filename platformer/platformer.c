@@ -19,28 +19,66 @@
 
 // struct to hold player info
 typedef struct {
-    SDL_FRect* rect;
-    double xvel;
-    double yvel;
+    float x;
+    float y;
+    float xvel;
+    float yvel;
 } Player;
 
 
 // struct to hold camera info
 // the x and y represent the top left point of the camera
 typedef struct {
-    double x;
-    double y;
-    double zoom;  // not currently being used
+    float x;
+    float y;
+    float zoom;
 } Camera;
 
+
+// struct to hold obstacles
+typedef struct {
+    float x;
+    float y;
+    float w;
+    float h;
+} Obstacle;
+
+
+/*
+ * sets the camera's zoom to the given value
+ * zooms in towards the centre of the screen
+ */
+void zoom_camera(Camera* camera, float zoom) {
+    float scale_factor = zoom / camera->zoom;
+    float offset_factor = (1 - 1/scale_factor) / 2 * 1/camera->zoom;
+
+    // move the camera so that it is centred
+    camera->x += offset_factor * WIDTH;
+    camera->y += offset_factor * HEIGHT;
+
+    // set the new zoom
+    camera->zoom = zoom;
+}
 
 /*
  * Focuses the camera on the given x,y position (where x and y are global coordinate values)
  * This is done so that the centre of the camera is on (x,y)
  */
-void focus_camera(Camera* camera, float x, float y, float camera_speed) {
-    double dx = (x - WIDTH/2) - camera->x;
-    double dy = (y - HEIGHT/2) - camera->y;
+void focus_camera(Camera* camera, float x, float y, float zoom, float camera_speed) {
+    // zoom the camera
+    float dzoom = zoom - camera->zoom;
+    if (dzoom) {
+        zoom_camera(camera, camera->zoom + dzoom*camera_speed);
+    }
+
+    // calculate zoom adjustments
+    float scale_factor = (1 - 1/camera->zoom) / 2;
+    x += scale_factor * WIDTH;
+    y += scale_factor * HEIGHT;
+
+    // move the camera
+    float dx = (x - WIDTH/2) - camera->x;
+    float dy = (y - HEIGHT/2) - camera->y;
     camera->x += dx * camera_speed;
     camera->y += dy * camera_speed;
 }
@@ -51,12 +89,14 @@ void focus_camera(Camera* camera, float x, float y, float camera_speed) {
  *
  * The collision detection is non-inclusive of edges. I.e. if you are just touching it is not a collision
 */
-int player_collision(SDL_FRect* collision_rect, Player* player, SDL_FRect* obstacles, int obstacle_count) {
+int player_collision(Obstacle* collision_rect, Player* player, Obstacle* obstacles, int obstacle_count) {
     for (int i=0; i<obstacle_count; i++) {
-        if (player->rect->x + player->rect->w > obstacles[i].x &&
-                player->rect->x < obstacles[i].x + obstacles[i].w &&
-                player->rect->y + player->rect->h > obstacles[i].y &&
-                player->rect->y < obstacles[i].y + obstacles[i].h) {
+        if (
+                player->x + PLAYER_SIZE > obstacles[i].x &&
+                player->x < obstacles[i].x + obstacles[i].w &&
+                player->y + PLAYER_SIZE > obstacles[i].y &&
+                player->y < obstacles[i].y + obstacles[i].h
+            ) {
 
             *collision_rect = obstacles[i];
             return 1;
@@ -69,14 +109,14 @@ int player_collision(SDL_FRect* collision_rect, Player* player, SDL_FRect* obsta
 /*
  * move the player horiztonaly by the specified dx
  */
-void move_player(double dx, SDL_FRect* collision_rect, Player* player, SDL_FRect* obstacles, int obstacle_count) {
-    player->rect->x += dx;
+void move_player(float dx, Obstacle* collision_rect, Player* player, Obstacle* obstacles, int obstacle_count) {
+    player->x += dx;
     while (player_collision(collision_rect, player, obstacles, obstacle_count)) {
         player->xvel = 0;
         if (dx > 0) {  // moving right
-            player->rect->x = collision_rect->x - PLAYER_SIZE;
+            player->x = collision_rect->x - PLAYER_SIZE;
         } else {  // moving left
-            player->rect->x = collision_rect->x + collision_rect->w;
+            player->x = collision_rect->x + collision_rect->w;
         }
     }
 }
@@ -84,23 +124,39 @@ void move_player(double dx, SDL_FRect* collision_rect, Player* player, SDL_FRect
 /*
 * render the screen in its current state
 */
-void render_screen(SDL_Renderer *renderer, Camera* camera, Player* player, SDL_FRect* obstacles, int obstacle_count) {
+void render_screen(SDL_Renderer *renderer, Camera* camera, Player* player, Obstacle* obstacles, int obstacle_count) {
     // fill the background
     SDL_SetRenderDrawColor(renderer, 0x12, 0x0c, 0x36, 0xff);
     SDL_RenderClear(renderer);
 
+    // define rect used to draw objects
+    SDL_FRect rect;
+
     // render the obstacles
     SDL_SetRenderDrawColor(renderer, 0xf7, 0xc1, 0x2d, 0xff);
     for (int i=0; i<obstacle_count; i++) {
-        SDL_FRect* obstacle = obstacles + i;  // get the current obstacle
-        SDL_FRect obstacle_local = {obstacle->x - camera->x, obstacle->y - camera->y, obstacle->w, obstacle->h};
-        SDL_RenderFillRect(renderer, &obstacle_local);
+        Obstacle* obstacle = obstacles + i;  // get the current obstacle
+        
+        // calculate the render rect
+        rect = (SDL_FRect) {
+            camera->zoom * (obstacle->x - camera->x), 
+            camera->zoom * (obstacle->y - camera->y),
+            camera->zoom * obstacle->w,
+            camera->zoom * obstacle->h
+        };
+
+        SDL_RenderFillRect(renderer, &rect);
     }
 
     // render the player
     SDL_SetRenderDrawColor(renderer, 0x3c, 0xd6, 0x65, 0xff);
-    SDL_FRect player_local = {player->rect->x - camera->x, player->rect->y - camera->y, player->rect->w, player->rect->h};
-    SDL_RenderFillRect(renderer, &player_local);
+    SDL_FRect player_render = {
+        camera->zoom * (player->x - camera->x),
+        camera->zoom * (player->y - camera->y),
+        camera->zoom * PLAYER_SIZE,
+        camera->zoom * PLAYER_SIZE
+    };
+    SDL_RenderFillRect(renderer, &player_render);
 }
 
 
@@ -111,7 +167,7 @@ int main() {
     SDL_Renderer* renderer = SDL_CreateRenderer(window, NULL);
 
     // array containing the obstacles
-    SDL_FRect obstacles[] = {
+    Obstacle obstacles[] = {
         {0, 575, 500, 25},
         {200, 480, 100, 25},
         {425, 500, 25, 75},
@@ -122,17 +178,19 @@ int main() {
     int obstacle_count = sizeof(obstacles) / sizeof(obstacles[0]);
 
     // define the player
-    SDL_FRect player_rect = {100, 440, PLAYER_SIZE, PLAYER_SIZE};
-    Player player = {&player_rect, 0, 0};
-    SDL_FRect collision_rect;
+    Player player = {10, 440, 0, 0};
 
     // initialise the camera
     Camera camera = {0, 0, 1};
-    focus_camera(&camera, player_rect.x, player_rect.y, 1);
+    focus_camera(&camera, player.x, player.y, 1, 1);
 
     Uint32 frame_time;  // length of frame in miliseconds
     const Uint32 FRAME_DELAY = 1000 / FPS;  // desired frame time
     
+    Obstacle collision_rect;
+
+    float zoom = 1;
+
     const bool* keys = SDL_GetKeyboardState(NULL);  // get key presses
     SDL_Event event;
 
@@ -149,15 +207,21 @@ int main() {
                 // q key quits the platformer
                 if (event.key.key == SDLK_Q) { run = 0; }
             }
+
+            else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+                if (event.wheel.y >= 0 || zoom > 1) {
+                    zoom += event.wheel.y;
+                }
+            }
         }
 
         // get key presses
         if (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) {
-            player_rect.y ++;  // push player into the ground
+            player.y ++;  // push player into the ground
             if (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
                 player.yvel = -JUMP_VEL;  // give an upward velocity
             }
-            player_rect.y --;  // take the player back off
+            player.y --;  // take the player back off
         }
         if (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) {
             player.xvel = 5;
@@ -166,24 +230,26 @@ int main() {
             player.xvel = -5;
         }
 
+        // Move the player horiztonaly
         move_player(player.xvel, &collision_rect, &player, obstacles, obstacle_count);
         player.xvel *= FRICTION;
 
-        player_rect.y += player.yvel;
+        // Move the player vertically
+        player.y += player.yvel;
         player.yvel += ACCELERATION;
 
         while (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
             // positive yvel means player is falling
             if (player.yvel > 0) {
-                player_rect.y = collision_rect.y - PLAYER_SIZE;
+                player.y = collision_rect.y - PLAYER_SIZE;
             } else {  // negative yvel means the player is falling
-                player_rect.y = collision_rect.y + collision_rect.h;
+                player.y = collision_rect.y + collision_rect.h;
             }
             player.yvel = 0;
         }
 
         // update the camera position
-        focus_camera(&camera, player_rect.x, player_rect.y, CAMERA_SPEED);
+        focus_camera(&camera, player.x + PLAYER_SIZE/2, player.y + PLAYER_SIZE/2, zoom, CAMERA_SPEED);
 
         render_screen(renderer, &camera, &player, obstacles, obstacle_count);
         SDL_RenderPresent(renderer);  // update the screen
