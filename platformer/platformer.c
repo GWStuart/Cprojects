@@ -11,6 +11,8 @@
 
 #define PLAYER_SIZE 20
 #define ACCELERATION 1
+#define FRICTION 0.85
+#define JUMP_VEL 14
 
 
 // struct to hold player info
@@ -45,9 +47,10 @@ int player_collision(SDL_FRect* collision_rect, Player* player, SDL_FRect* obsta
 /*
  * move the player horiztonaly by the specified dx
  */
-void move_player(int dx, SDL_FRect* collision_rect, Player* player, SDL_FRect* obstacles, int obstacle_count) {
+void move_player(double dx, SDL_FRect* collision_rect, Player* player, SDL_FRect* obstacles, int obstacle_count) {
     player->rect->x += dx;
     while (player_collision(collision_rect, player, obstacles, obstacle_count)) {
+        player->xvel = 0;
         if (dx > 0) {  // moving right
             player->rect->x = collision_rect->x - PLAYER_SIZE;
         } else {  // moving left
@@ -85,11 +88,11 @@ int main() {
     // array containing the obstacles
     SDL_FRect obstacles[] = {
         {0, 575, 500, 25},
-        {200, 460, 100, 25},
+        {200, 480, 100, 25},
         {425, 500, 25, 75},
-        {300, 360, 100, 25},
-        {400, 260, 100, 25},
-        {300, 160, 100, 25},
+        {300, 380, 100, 25},
+        {400, 280, 100, 25},
+        {300, 180, 100, 25},
     };
     int obstacle_count = sizeof(obstacles) / sizeof(obstacles[0]);
 
@@ -123,16 +126,19 @@ int main() {
         if (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) {
             player_rect.y ++;  // push player into the ground
             if (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
-                player.yvel = -15;  // give an upward velocity
+                player.yvel = -JUMP_VEL;  // give an upward velocity
             }
             player_rect.y --;  // take the player back off
         }
         if (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) {
-            move_player(5, &collision_rect, &player, obstacles, obstacle_count);
+            player.xvel = 5;
         }
         if (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]) {
-            move_player(-5, &collision_rect, &player, obstacles, obstacle_count);
+            player.xvel = -5;
         }
+
+        move_player(player.xvel, &collision_rect, &player, obstacles, obstacle_count);
+        player.xvel *= FRICTION;
 
         player_rect.y += player.yvel;
         player.yvel += ACCELERATION;
