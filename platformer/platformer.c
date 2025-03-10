@@ -234,8 +234,8 @@ int main() {
             else if (event.type == SDL_EVENT_MOUSE_MOTION) {
                 if (mouse_down) {
                     // camera_speed = 0.05;
-                    camera.x -= event.motion.xrel;
-                    camera.y -= event.motion.yrel;
+                    camera.x -= event.motion.xrel / camera.zoom;
+                    camera.y -= event.motion.yrel / camera.zoom;
                 }
             }
         }
