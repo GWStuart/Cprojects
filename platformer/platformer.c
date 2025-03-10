@@ -2,6 +2,7 @@
 #include <SDL3/SDL_main.h>
 
 #include <stdio.h>
+#include <math.h>
 
 
 #define FPS 60
@@ -14,7 +15,7 @@
 #define FRICTION 0.85
 #define JUMP_VEL 14
 
-#define CAMERA_SPEED 0.2
+#define DEFAULT_CAMERA_SPEED 0.1
 
 
 // struct to hold player info
@@ -179,17 +180,23 @@ int main() {
 
     // define the player
     Player player = {10, 440, 0, 0};
+    int allow_motion = 0;
 
     // initialise the camera
     Camera camera = {0, 0, 1};
-    focus_camera(&camera, player.x, player.y, 1, 1);
+    focus_camera(&camera, 250, 350, 0.5, 1);
+
+    float zoom = 1;
+    float camera_speed = 0.05;
+    int camera_speed_reset = 0;
+    float default_camera_speed = DEFAULT_CAMERA_SPEED;
 
     Uint32 frame_time;  // length of frame in miliseconds
     const Uint32 FRAME_DELAY = 1000 / FPS;  // desired frame time
     
+    int mouse_down = 0;  // 1 when mouse is down and 0 otherwise
+    
     Obstacle collision_rect;
-
-    float zoom = 1;
 
     const bool* keys = SDL_GetKeyboardState(NULL);  // get key presses
     SDL_Event event;
@@ -208,26 +215,46 @@ int main() {
                 if (event.key.key == SDLK_Q) { run = 0; }
             }
 
+            // mouse wheel scrolls in and out
             else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
                 if (event.wheel.y >= 0 || zoom > 1) {
-                    zoom += event.wheel.y;
+                    zoom += event.wheel.y / 2;
+                } else {
+                    zoom *= 0.75;
+                }
+            }
+
+            // click and drag mouse to pan
+            else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                mouse_down = 1;
+            }
+            else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+                mouse_down = 0;
+            }
+            else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+                if (mouse_down) {
+                    // camera_speed = 0.05;
+                    camera.x -= event.motion.xrel;
+                    camera.y -= event.motion.yrel;
                 }
             }
         }
 
         // get key presses
-        if (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) {
-            player.y ++;  // push player into the ground
-            if (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
-                player.yvel = -JUMP_VEL;  // give an upward velocity
+        if (allow_motion) {
+            if (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) {
+                player.y ++;  // push player into the ground
+                if (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
+                    player.yvel = -JUMP_VEL;  // give an upward velocity
+                }
+                player.y --;  // take the player back off
             }
-            player.y --;  // take the player back off
-        }
-        if (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) {
-            player.xvel = 5;
-        }
-        if (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]) {
-            player.xvel = -5;
+            if (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) {
+                player.xvel = 5;
+            }
+            if (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]) {
+                player.xvel = -5;
+            }
         }
 
         // Move the player horiztonaly
@@ -249,7 +276,20 @@ int main() {
         }
 
         // update the camera position
-        focus_camera(&camera, player.x + PLAYER_SIZE/2, player.y + PLAYER_SIZE/2, zoom, CAMERA_SPEED);
+        if (!mouse_down) {
+            focus_camera(&camera, player.x + PLAYER_SIZE/2, player.y + PLAYER_SIZE/2, zoom, camera_speed);
+        }
+
+        // camera speed return to default values
+        if (camera_speed != default_camera_speed) {
+            camera_speed_reset++;
+            float n = log(0.01) / log(1 - camera_speed);
+            if (camera_speed_reset >= n) {
+                camera_speed = default_camera_speed;
+                camera_speed_reset = 0;
+                allow_motion = 1;
+            }
+        }
 
         render_screen(renderer, &camera, &player, obstacles, obstacle_count);
         SDL_RenderPresent(renderer);  // update the screen
