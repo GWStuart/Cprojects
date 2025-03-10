@@ -24,13 +24,15 @@ typedef struct {
 /*
  * Returns 1 if there is a collision with an obstacle and 0 otherwise
  * The object with which the player collided with will be stroed in the collision_rect
+ *
+ * The collision detection is non-inclusive of edges. I.e. if you are just touching it is not a collision
 */
 int player_collision(SDL_FRect* collision_rect, Player* player, SDL_FRect* obstacles, int obstacle_count) {
     for (int i=0; i<obstacle_count; i++) {
-        if (player->rect->x + player->rect->w >= obstacles[i].x &&
-                player->rect->x <= obstacles[i].x + obstacles[i].w &&
-                player->rect->y + player->rect->h >= obstacles[i].y &&
-                player->rect->y <= obstacles[i].y + obstacles[i].h) {
+        if (player->rect->x + player->rect->w > obstacles[i].x &&
+                player->rect->x < obstacles[i].x + obstacles[i].w &&
+                player->rect->y + player->rect->h > obstacles[i].y &&
+                player->rect->y < obstacles[i].y + obstacles[i].h) {
 
             *collision_rect = obstacles[i];
             return 1;
@@ -45,15 +47,13 @@ int player_collision(SDL_FRect* collision_rect, Player* player, SDL_FRect* obsta
  */
 void move_player(int dx, SDL_FRect* collision_rect, Player* player, SDL_FRect* obstacles, int obstacle_count) {
     player->rect->x += dx;
-    player->rect->y -= 1;  // take player off the ground
-    if (player_collision(collision_rect, player, obstacles, obstacle_count)) {
+    while (player_collision(collision_rect, player, obstacles, obstacle_count)) {
         if (dx > 0) {  // moving right
-            player->rect->x = collision_rect->x - PLAYER_SIZE - 1;
+            player->rect->x = collision_rect->x - PLAYER_SIZE;
         } else {  // moving left
-            player->rect->x = collision_rect->x + collision_rect->w + 1;
+            player->rect->x = collision_rect->x + collision_rect->w;
         }
     }
-    player->rect->y += 1;  // return player
 }
 
 /*
@@ -120,25 +120,29 @@ int main() {
         }
 
         // get key presses
-        if (keys[SDL_SCANCODE_W] && player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
-            player.yvel = -15;  // give an upward velocity
+        if (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP]) {
+            player_rect.y ++;  // push player into the ground
+            if (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
+                player.yvel = -15;  // give an upward velocity
+            }
+            player_rect.y --;  // take the player back off
         }
-        if (keys[SDL_SCANCODE_D]) {
+        if (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT]) {
             move_player(5, &collision_rect, &player, obstacles, obstacle_count);
         }
-        if (keys[SDL_SCANCODE_A]) {
+        if (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]) {
             move_player(-5, &collision_rect, &player, obstacles, obstacle_count);
         }
 
         player_rect.y += player.yvel;
         player.yvel += ACCELERATION;
 
-        if (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
+        while (player_collision(&collision_rect, &player, obstacles, obstacle_count)) {
             // positive yvel means player is falling
             if (player.yvel > 0) {
                 player_rect.y = collision_rect.y - PLAYER_SIZE;
             } else {  // negative yvel means the player is falling
-                player_rect.y = collision_rect.y + collision_rect.h + 1;
+                player_rect.y = collision_rect.y + collision_rect.h;
             }
             player.yvel = 0;
         }
